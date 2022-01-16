@@ -1,0 +1,46 @@
+version: "3.8"
+
+services:
+    chat:
+        build:
+            context: .
+        image: werewolf-chat:dev-latest
+        volumes:
+            - ./:/app
+        ports:
+            - 3000:${CHAT_PORT}
+        entrypoint:
+            - /bin/sh
+        command:
+            - -c
+            - npx pnpm start:dev
+        networks:
+            - postgres-network
+        depends_on:
+            - postgres
+        restart: unless-stopped
+
+    postgres:
+        image: postgres:14.1-alpine3.15
+        environment:
+            - POSTGRES_DB=${DB_DATABASE}
+            - POSTGRES_USER=${DB_USERNAME}
+            - POSTGRES_PASSWORD=${DB_PASSWORD}
+        volumes:
+            - ./.docker/postgres/data:/var/lib/postgresql/data
+        networks:
+            - postgres-network
+        restart: unless-stopped
+
+    adminer:
+        image: dockette/adminer:pgsql
+        ports:
+        - 8081:80
+        networks:
+            - postgres-network
+        depends_on:
+            - postgres
+        restart: unless-stopped
+
+networks:
+    postgres-network:
