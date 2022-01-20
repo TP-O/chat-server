@@ -17,7 +17,7 @@ export class AuthService {
 
     const token = await this.prismaService.personalAccessToken.findFirst({
       select: {
-        id: true,
+        tokenable_id: true,
       },
       where: {
         tokenable_id: playerId,
@@ -25,7 +25,7 @@ export class AuthService {
       },
     });
 
-    return token ? Number(playerId) : 0;
+    return token?.tokenable_id === playerId ? playerId : 0;
   }
 
   parseToken(authorization: string) {

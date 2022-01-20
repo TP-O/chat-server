@@ -7,41 +7,63 @@ import {
 import { Server, Socket } from 'socket.io';
 import { chatConfig } from 'src/config/chat.config';
 import { AuthService } from '../auth/auth.service';
-
-const cache = {
-  ids: new Map<number, string>(),
-  sids: new Map<string, number>(),
-};
+import { ChatService } from './services/chat.service';
+import { PlayerService } from './services/player.service';
+import { Event } from './types/event.type';
+import { Status, StatusId } from './types/status.type';
 
 @WebSocketGateway(chatConfig.port)
 export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   private readonly server: Server;
 
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly chatService: ChatService,
+    private readonly playerService: PlayerService,
+  ) {}
 
   async handleConnection(client: Socket) {
-    const id = await this.authService.verify(
+    const playerId = await this.authService.verify(
       client.handshake.headers.authorization,
     );
 
-    if (id === 0) {
+    if (!playerId) {
       client.disconnect();
-    } else {
-      cache.ids.set(id, client.id);
-      cache.sids.set(client.id, id);
+
+      return;
     }
 
-    console.log(cache);
+    const player = await this.playerService.makeOnline(playerId, client.id);
+    const friendList = await this.playerService.getFriendList(playerId);
+
+    // Announce online player to their online friends
+    this.server
+      .to(
+        friendList
+          .filter((f) => f.state.status_id === StatusId.ONLINE)
+          .map((f) => f.state.socket_id),
+      )
+      .emit(Event.FRIEND_STATUS, player);
+
+    // Send friend list to the player
+    this.server.to(client.id).emit(Event.FRIEND_LIST, friendList);
   }
 
-  handleDisconnect(client: Socket) {
-    const id = cache.sids.get(client.id);
+  async handleDisconnect(client: Socket) {
+    const { player_id: playerId } = await this.playerService.makeOffline(
+      client.id,
+    );
 
-    cache.ids.delete(id);
-    cache.sids.delete(client.id);
+    const onlineFriends = await this.playerService.getOnlineFriends(playerId);
 
-    console.log(cache);
+    // Announce offline player to their online friends
+    this.server
+      .to(onlineFriends.map((f) => f.state.socket_id))
+      .emit(Event.FRIEND_STATUS, {
+        id: playerId,
+        state: { status: { name: Status.OFFLINE } },
+      });
   }
 
   // @SubscribeMessage(EventType.PRIVATE_MESSAGE)

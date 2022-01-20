@@ -4,10 +4,10 @@ export async function seedFriendRelationshipType(client: PrismaClient) {
   return client.friendRelationshipType.createMany({
     data: [
       {
-        name: 'first_asked',
+        name: 'First asked',
       },
       {
-        name: 'second_asked',
+        name: 'Second asked',
       },
     ],
   });
