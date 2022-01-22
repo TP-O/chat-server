@@ -7,6 +7,10 @@ export class AuthService {
   constructor(private readonly prismaService: PrismaService) {}
 
   async verify(authorization: string) {
+    if (authorization === undefined) {
+      return 0;
+    }
+
     const [key, plainTextToken] = this.parseToken(authorization);
 
     const playerId = Number(key);

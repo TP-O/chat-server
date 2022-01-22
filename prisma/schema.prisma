@@ -20,6 +20,8 @@ model Player {
   state                          PlayerState?
   first_player_in_relationships  FriendRelationship[] @relation("first_player")
   second_player_in_relationships FriendRelationship[] @relation("second_player")
+  sent_messages                  PrivateMessage[]     @relation("sender")
+  received_messages              PrivateMessage[]     @relation("receiver")
 
   @@unique([username])
   @@unique([email])
@@ -107,11 +109,11 @@ model PlayerStatus {
 }
 
 model PlayerState {
-  id                Int       @id @default(autoincrement())
-  player_id         Int
-  status_id         Int
-  socket_id         String?   @db.VarChar(25)
-  status_updated_at DateTime? @db.Timestamp(0)
+  id                     Int       @id @default(autoincrement())
+  player_id              Int
+  status_id              Int
+  socket_id              String?   @db.VarChar(25)
+  latest_match_joined_at DateTime? @db.Timestamp(0)
 
   player Player       @relation(fields: [player_id], references: [id])
   status PlayerStatus @relation(fields: [status_id], references: [id])
@@ -119,4 +121,17 @@ model PlayerState {
   @@unique([player_id])
   @@unique([socket_id])
   @@map("player_states")
+}
+
+model PrivateMessage {
+  id          Int       @id @default(autoincrement())
+  sender_id   Int
+  receiver_id Int
+  content     String    @db.Text()
+  created_at  DateTime? @default(now()) @db.Timestamp(0)
+
+  sender   Player @relation(name: "sender", fields: [sender_id], references: [id])
+  receiver Player @relation(name: "receiver", fields: [receiver_id], references: [id])
+
+  @@map("private_messages")
 }

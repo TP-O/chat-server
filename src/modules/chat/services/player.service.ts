@@ -7,19 +7,6 @@ import { StatusId } from '../types/status.type';
 export class PlayerService {
   constructor(private readonly prismaService: PrismaService) {}
 
-  // get(playerId: number) {
-  //   return this.prismaService.player.findUnique({
-  //     select: {
-  //       id: true,
-  //       username: true,
-  //       state: true,
-  //     },
-  //     where: {
-  //       id: playerId,
-  //     },
-  //   });
-  // }
-
   makeOnline(playerId: number, socketId: string) {
     return this.prismaService.player.update({
       select: {

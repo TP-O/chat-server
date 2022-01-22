@@ -1,16 +1,21 @@
 import {
+  ConnectedSocket,
+  MessageBody,
   OnGatewayConnection,
   OnGatewayDisconnect,
+  SubscribeMessage,
   WebSocketGateway,
   WebSocketServer,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
-import { chatConfig } from 'src/config/chat.config';
+import { chatConfig } from 'src/configs/chat.config';
 import { AuthService } from '../auth/auth.service';
-import { ChatService } from './services/chat.service';
+import { MessageService } from './services/message.service';
 import { PlayerService } from './services/player.service';
 import { Event } from './types/event.type';
 import { Status, StatusId } from './types/status.type';
+
+const cache = new Map<string, number>();
 
 @WebSocketGateway(chatConfig.port)
 export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
@@ -19,8 +24,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   constructor(
     private readonly authService: AuthService,
-    private readonly chatService: ChatService,
     private readonly playerService: PlayerService,
+    private readonly messageService: MessageService,
   ) {}
 
   async handleConnection(client: Socket) {
@@ -37,6 +42,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     const player = await this.playerService.makeOnline(playerId, client.id);
     const friendList = await this.playerService.getFriendList(playerId);
 
+    cache.set(client.id, playerId);
+
     // Announce online player to their online friends
     this.server
       .to(
@@ -51,9 +58,15 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   async handleDisconnect(client: Socket) {
+    if (client.handshake.headers.authorization === undefined) {
+      return;
+    }
+
     const { player_id: playerId } = await this.playerService.makeOffline(
       client.id,
     );
+
+    cache.delete(client.id);
 
     const onlineFriends = await this.playerService.getOnlineFriends(playerId);
 
@@ -66,14 +79,29 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       });
   }
 
-  // @SubscribeMessage(EventType.PRIVATE_MESSAGE)
-  // handlePrivateMessage(
-  //   @ConnectedSocket() client: Socket,
-  //   @MessageBody() message: PrivateMessage,
-  // ): any {
-  //   console.log(message);
-  //   console.log(this.server.of('/').adapter.rooms);
+  @SubscribeMessage(Event.PRIVATE_MESSAGE)
+  async handlePrivateMessage(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() message: any,
+  ) {
+    const senderId = cache.get(client.id);
 
-  //   this.server.to(client.id).emit(EventType.PRIVATE_MESSAGE_REPLY, message);
-  // }
+    const prviateMessage = await this.messageService.store({
+      sender_id: senderId,
+      receiver_id: message.receiver_id,
+      content: message.content,
+    });
+
+    if (prviateMessage?.content !== message.content) {
+      this.server.to(client.id).emit(Event.FAILED_PRIVATE_MESSAGE, {
+        reveiver_id: message.receiver_id,
+        content: message.content,
+      });
+    } else {
+      this.server.to(message.socket_id).emit(Event.PRIVATE_MESSAGE, {
+        sender_id: senderId,
+        content: message.content,
+      });
+    }
+  }
 }
