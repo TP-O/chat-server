@@ -215,12 +215,10 @@ export class PlayerService {
           id: true,
         },
         where: {
-          first_player_id: playerId,
-          second_player_id: friendId,
-          OR: {
-            first_player_id: friendId,
-            second_player_id: playerId,
-          },
+          OR: [
+            { first_player_id: playerId, second_player_id: friendId },
+            { first_player_id: playerId, second_player_id: friendId },
+          ],
         },
       });
 
