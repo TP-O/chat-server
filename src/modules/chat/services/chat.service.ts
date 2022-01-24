@@ -49,6 +49,10 @@ export class ChatService {
       socketId,
     );
 
+    if (playerId === null) {
+      return;
+    }
+
     const onlineFriends = await this.playerService.getOnlineFriends(playerId);
 
     // Announce offline player to their online friends

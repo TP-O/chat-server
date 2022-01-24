@@ -64,6 +64,10 @@ export class PlayerService {
       `${socketConfig.cacheKeys.SOCKET_ID_MAP_ID}${socketId}`,
     );
 
+    if (id === null) {
+      return { player_id: id };
+    }
+
     await this.cacheManager.del(
       `${socketConfig.cacheKeys.SOCKET_ID_MAP_ID}${socketId}`,
     );

@@ -41,6 +41,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     );
 
     if (!playerId) {
+      this.handleFailedEvent(socket.id, 'CONNECTION', ['Unauthenticated']);
+
       return socket.disconnect();
     }
 
@@ -75,6 +77,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     if (!prviateMessage) {
       this.handleFailedEvent(
         socket.id,
+        Event.PRIVATE_MESSAGE,
         ['Unable to send this message'],
         message,
       );
@@ -87,16 +90,18 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
    * Handle failed event.
    *
    * @param socketId connected socket id.
+   * @param event event's name.
    * @param messages error messages.
    * @param messageBody event's message body.
    */
   private handleFailedEvent(
     socketId: string,
+    event: string,
     messages: string[],
     messageBody?: any,
   ) {
     this.server.to(socketId).emit(Event.EXCEPTION, {
-      event: Event.PRIVATE_MESSAGE,
+      event,
       messages,
       data: messageBody,
     });
