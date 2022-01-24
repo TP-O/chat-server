@@ -80,7 +80,7 @@ export class ChatService {
     );
 
     // Do not nofity if receiver is offline
-    if (receiverSocketId !== undefined) {
+    if (receiverSocketId !== null) {
       server.to(receiverSocketId).emit(Event.PRIVATE_MESSAGE, {
         sender_id: privateMessage.sender_id,
         content: privateMessage.content,

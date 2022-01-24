@@ -22,10 +22,12 @@ export class PlayerService {
     await this.cacheManager.set(
       `${socketConfig.cacheKeys.SOCKET_ID_MAP_ID}${socketId}`,
       playerId,
+      { ttl: 0 },
     );
     await this.cacheManager.set(
       `${socketConfig.cacheKeys.ID_MAP_SOCKET_ID}${playerId}`,
       socketId,
+      { ttl: 0 },
     );
 
     return this.prismaService.player.update({
