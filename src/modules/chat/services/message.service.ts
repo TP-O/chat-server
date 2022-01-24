@@ -3,11 +3,13 @@ import { Cache } from 'cache-manager';
 import { socketConfig } from 'src/configs/socket.config';
 import { PrismaService } from 'src/modules/prisma/prisma.service';
 import { PrivateMessageBody } from '../dto/private-message.dto';
+import { PlayerService } from './player.service';
 
 @Injectable()
 export class MessageService {
   constructor(
     private readonly prismaService: PrismaService,
+    private readonly playerService: PlayerService,
     @Inject(CACHE_MANAGER) private readonly cacheManager: Cache,
   ) {}
 
@@ -24,8 +26,12 @@ export class MessageService {
     const senderId = await this.cacheManager.get<number>(
       `${socketConfig.cacheKeys.SOCKET_ID_MAP_ID}${senderSocketId}`,
     );
+    const areFriends = await this.playerService.areFriends(
+      senderId,
+      message.receiver_id,
+    );
 
-    if (!Number.isInteger(senderId)) {
+    if (!Number.isInteger(senderId) || !areFriends) {
       return null;
     }
 

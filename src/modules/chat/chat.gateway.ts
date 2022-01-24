@@ -73,13 +73,32 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     );
 
     if (!prviateMessage) {
-      this.chatService.sendPrivateMessageFailed(
-        this.server,
+      this.handleFailedEvent(
         socket.id,
+        ['Unable to send this message'],
         message,
       );
     } else {
       this.chatService.sendPrivateMessage(this.server, prviateMessage);
     }
+  }
+
+  /**
+   * Handle failed event.
+   *
+   * @param socketId connected socket id.
+   * @param messages error messages.
+   * @param messageBody event's message body.
+   */
+  private handleFailedEvent(
+    socketId: string,
+    messages: string[],
+    messageBody?: any,
+  ) {
+    this.server.to(socketId).emit(Event.EXCEPTION, {
+      event: Event.PRIVATE_MESSAGE,
+      messages,
+      data: messageBody,
+    });
   }
 }

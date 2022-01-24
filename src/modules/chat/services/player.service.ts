@@ -194,4 +194,29 @@ export class PlayerService {
       .map((f) => f.second_player)
       .concat(data.second_player_in_relationships.map((f) => f.frist_player));
   }
+
+  /**
+   * Check if two players are friends.
+   *
+   * @param playerId player's id.
+   * @param friendId friend's id.
+   */
+  async areFriends(playerId: number, friendId: number) {
+    const friendRelationship =
+      await this.prismaService.friendRelationship.findFirst({
+        select: {
+          id: true,
+        },
+        where: {
+          first_player_id: playerId,
+          second_player_id: friendId,
+          OR: {
+            first_player_id: friendId,
+            second_player_id: playerId,
+          },
+        },
+      });
+
+    return Number.isInteger(friendRelationship?.id);
+  }
 }

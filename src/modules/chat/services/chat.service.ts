@@ -3,7 +3,6 @@ import { Prisma } from '@prisma/client';
 import { Cache } from 'cache-manager';
 import { Server } from 'socket.io';
 import { socketConfig } from 'src/configs/socket.config';
-import { PrivateMessageBody } from '../dto/private-message.dto';
 import { Event } from '../types/event.type';
 import { Status, StatusId } from '../types/status.type';
 import { PlayerService } from './player.service';
@@ -83,23 +82,5 @@ export class ChatService {
         content: privateMessage.content,
       });
     }
-  }
-
-  /**
-   * Notify sender that send message failed.
-   *
-   * @param server socket server instance.
-   * @param senderSocketId sender's socket id.
-   * @param privateMessage message body of event `PRIVATE_MESSAGE`.
-   */
-  sendPrivateMessageFailed(
-    server: Server,
-    senderSocketId: string,
-    privateMessage: PrivateMessageBody,
-  ) {
-    server.to(senderSocketId).emit(Event.FAILED_PRIVATE_MESSAGE, {
-      reveiver_id: privateMessage.receiver_id,
-      content: privateMessage.content,
-    });
   }
 }
