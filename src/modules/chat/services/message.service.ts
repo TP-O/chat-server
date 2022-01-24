@@ -1,6 +1,6 @@
 import { CACHE_MANAGER, Inject, Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Cache } from 'cache-manager';
-import { socketConfig } from 'src/configs/socket.config';
 import { PrismaService } from 'src/modules/prisma/prisma.service';
 import { PrivateMessageBody } from '../dto/private-message.dto';
 import { PlayerService } from './player.service';
@@ -10,6 +10,7 @@ export class MessageService {
   constructor(
     private readonly prismaService: PrismaService,
     private readonly playerService: PlayerService,
+    private readonly configService: ConfigService,
     @Inject(CACHE_MANAGER) private readonly cacheManager: Cache,
   ) {}
 
@@ -24,7 +25,7 @@ export class MessageService {
     message: PrivateMessageBody,
   ) {
     const senderId = await this.cacheManager.get<number>(
-      `${socketConfig.cacheKeys.SOCKET_ID_MAP_ID}${senderSocketId}`,
+      `${this.configService.get('socket.branch.sid2Id')}${senderSocketId}`,
     );
     const areFriends = await this.playerService.areFriends(
       senderId,

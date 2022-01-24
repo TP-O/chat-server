@@ -1,8 +1,8 @@
 import { CACHE_MANAGER, Inject, Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
 import { Cache } from 'cache-manager';
 import { Server } from 'socket.io';
-import { socketConfig } from 'src/configs/socket.config';
 import { Event } from '../types/event.type';
 import { Status, StatusId } from '../types/status.type';
 import { PlayerService } from './player.service';
@@ -11,6 +11,7 @@ import { PlayerService } from './player.service';
 export class ChatService {
   constructor(
     private readonly playerService: PlayerService,
+    private readonly configService: ConfigService,
     @Inject(CACHE_MANAGER) private readonly cacheManager: Cache,
   ) {}
 
@@ -76,7 +77,9 @@ export class ChatService {
     privateMessage: Prisma.PrivateMessageUncheckedCreateInput,
   ) {
     const receiverSocketId = await this.cacheManager.get<string>(
-      `${socketConfig.cacheKeys.ID_MAP_SOCKET_ID}${privateMessage.receiver_id}`,
+      `${this.configService.get('socket.branch.id2Sid')}${
+        privateMessage.receiver_id
+      }`,
     );
 
     // Do not nofity if receiver is offline

@@ -1,7 +1,7 @@
 import { CACHE_MANAGER, Inject, Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Player, PlayerState } from '@prisma/client';
 import { Cache } from 'cache-manager';
-import { socketConfig } from 'src/configs/socket.config';
 import { PrismaService } from 'src/modules/prisma/prisma.service';
 import { StatusId } from '../types/status.type';
 
@@ -9,6 +9,7 @@ import { StatusId } from '../types/status.type';
 export class PlayerService {
   constructor(
     private readonly prismaService: PrismaService,
+    private readonly configService: ConfigService,
     @Inject(CACHE_MANAGER) private readonly cacheManager: Cache,
   ) {}
 
@@ -20,12 +21,12 @@ export class PlayerService {
    */
   async makeOnline(playerId: number, socketId: string) {
     await this.cacheManager.set(
-      `${socketConfig.cacheKeys.SOCKET_ID_MAP_ID}${socketId}`,
+      `${this.configService.get('socket.branch.sid2Id')}${socketId}`,
       playerId,
       { ttl: 0 },
     );
     await this.cacheManager.set(
-      `${socketConfig.cacheKeys.ID_MAP_SOCKET_ID}${playerId}`,
+      `${this.configService.get('socket.branch.id2Sid')}${playerId}`,
       socketId,
       { ttl: 0 },
     );
@@ -63,7 +64,7 @@ export class PlayerService {
    */
   async makeOffline(socketId: string) {
     const id = await this.cacheManager.get(
-      `${socketConfig.cacheKeys.SOCKET_ID_MAP_ID}${socketId}`,
+      `${this.configService.get('socket.branch.sid2Id')}${socketId}`,
     );
 
     if (id === null) {
@@ -71,10 +72,10 @@ export class PlayerService {
     }
 
     await this.cacheManager.del(
-      `${socketConfig.cacheKeys.SOCKET_ID_MAP_ID}${socketId}`,
+      `${this.configService.get('socket.branch.sid2Id')}${socketId}`,
     );
     await this.cacheManager.del(
-      `${socketConfig.cacheKeys.ID_MAP_SOCKET_ID}${id}`,
+      `${this.configService.get('socket.branch.id2Sid')}${id}`,
     );
 
     return this.prismaService.playerState.update({
