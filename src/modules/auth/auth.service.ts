@@ -11,13 +11,8 @@ export class AuthService {
    *
    * @param bearerToken token authentication.
    */
-  async verify(bearerToken: string) {
-    if (bearerToken === '') {
-      return 0;
-    }
-
+  async verify(bearerToken = ''): Promise<number> {
     const [key, plainTextToken] = this.parseToken(bearerToken);
-
     const playerId = Number(key);
 
     // Failed if key or plain text token don't exist
@@ -44,7 +39,7 @@ export class AuthService {
    *
    * @param bearerToken token authentication.
    */
-  parseToken(bearerToken: string) {
+  private parseToken(bearerToken: string): string[] {
     return bearerToken.replace('Bearer ', '').split('|');
   }
 }

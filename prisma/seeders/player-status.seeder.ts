@@ -7,6 +7,9 @@ export async function seedPlayerStatus(client: PrismaClient) {
         name: 'Online',
       },
       {
+        name: 'Busy',
+      },
+      {
         name: 'Offline',
       },
       {

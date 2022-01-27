@@ -1,9 +1,13 @@
-import { CACHE_MANAGER, Inject, Injectable } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { Cache } from 'cache-manager';
 import { Server } from 'socket.io';
+import { CacheService } from 'src/modules/cache/cache.service';
 import { Event } from '../types/event.type';
+import {
+  PrivateMessageResponse,
+  Response,
+  ResponseEvent,
+} from '../types/response.type';
 import { Status, StatusId } from '../types/status.type';
 import { PlayerService } from './player.service';
 
@@ -11,8 +15,7 @@ import { PlayerService } from './player.service';
 export class ChatService {
   constructor(
     private readonly playerService: PlayerService,
-    private readonly configService: ConfigService,
-    @Inject(CACHE_MANAGER) private readonly cacheManager: Cache,
+    private readonly cacheService: CacheService,
   ) {}
 
   /**
@@ -22,7 +25,11 @@ export class ChatService {
    * @param socketId player's socket id.
    * @param playerId player's id.
    */
-  async connect(server: Server, socketId: string, playerId: number) {
+  async connect(
+    server: Server,
+    socketId: string,
+    playerId: number,
+  ): Promise<boolean> {
     const player = await this.playerService.makeOnline(playerId, socketId);
     const friendList = await this.playerService.getFriendList(playerId);
 
@@ -36,7 +43,7 @@ export class ChatService {
       .emit(Event.FRIEND_STATUS, player);
 
     // Send friend list to the player
-    server.to(socketId).emit(Event.FRIEND_LIST, friendList);
+    return server.to(socketId).emit(Event.FRIEND_LIST, friendList);
   }
 
   /**
@@ -45,12 +52,12 @@ export class ChatService {
    * @param server socket server instance.
    * @param socketId player's socket id.
    */
-  async disconnect(server: Server, socketId: string) {
+  async disconnect(server: Server, socketId: string): Promise<void> {
     const { player_id: playerId } = await this.playerService.makeOffline(
       socketId,
     );
 
-    if (playerId === null) {
+    if (!playerId) {
       return;
     }
 
@@ -69,25 +76,69 @@ export class ChatService {
    * Store new message then notify the recipients.
    *
    * @param server socket server instance.
-   * @param senderSocketId sender's socket id.
+   * @param identifier message's identifier.
    * @param privateMessage stored message.
    */
   async sendPrivateMessage(
     server: Server,
+    identifier: any,
     privateMessage: Prisma.PrivateMessageUncheckedCreateInput,
-  ) {
-    const receiverSocketId = await this.cacheManager.get<string>(
-      `${this.configService.get('socket.branch.id2Sid')}${
-        privateMessage.receiver_id
-      }`,
+  ): Promise<ResponseEvent<PrivateMessageResponse>> {
+    const receiverSocketId = await this.cacheService.getSocketId(
+      privateMessage.receiver_id,
     );
 
-    // Do not nofity if receiver is offline
-    if (receiverSocketId !== null) {
+    // Notify online receiver
+    if (receiverSocketId) {
       server.to(receiverSocketId).emit(Event.PRIVATE_MESSAGE, {
+        identifier,
         sender_id: privateMessage.sender_id,
         content: privateMessage.content,
       });
     }
+
+    return this.successfulResponse<PrivateMessageResponse>({
+      event: Event.PRIVATE_MESSAGE,
+      message: 'Message has been sent!',
+      data: {
+        identifier,
+        receiver_id: privateMessage.receiver_id,
+      },
+    });
+  }
+
+  /**
+   * Create response event.
+   *
+   * @param response response's detail.
+   * @param failed check if response is exception or completion.
+   */
+  private response<T>(response: Response<T>, failed = false): ResponseEvent<T> {
+    return {
+      event: failed ? Event.FAILURE : Event.SUCCESS,
+      data: response,
+    };
+  }
+
+  /**
+   * Create successful response.
+   *
+   * @param response response's detail.
+   */
+  successfulResponse<T>(response: Response<T>): ResponseEvent<T> {
+    response.message === response.message ?? 'Completed!';
+
+    return this.response(response);
+  }
+
+  /**
+   * Create failed response.
+   *
+   * @param response response's detail.
+   */
+  failedResponse<T>(response: Response<T>): ResponseEvent<T> {
+    response.message === response.message ?? 'Unexpected error!';
+
+    return this.response(response, true);
   }
 }

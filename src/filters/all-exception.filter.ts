@@ -4,28 +4,46 @@ import { Event } from 'src/modules/chat/types/event.type';
 
 @Catch()
 export class AllExceptionsFilter extends BaseWsExceptionFilter {
-  catch(exception: Error, host: ArgumentsHost) {
+  /**
+   * Handle all exceptions.
+   *
+   * @param exception exception instance.
+   * @param host object used to choose the appropriate context.
+   */
+  catch(exception: Error, host: ArgumentsHost): boolean {
     const server = host.switchToWs();
     const eventName = Object.keys(server.getClient()._events)[1] || 'Unknown';
-    const messages: string[] = [];
+    let message: string;
 
     if (exception instanceof BadRequestException) {
-      messages.push(...this.createBadRequestExceptionMessage(exception));
+      message = this.createBadRequestExceptionMessage(exception);
     } else {
-      messages.push(this.createDefaultMesssage(exception));
+      message = this.createErrorMesssage(exception);
     }
 
-    return server.getClient().emit(Event.EXCEPTION, {
+    return server.getClient().emit(Event.FAILURE, {
       event: eventName,
-      messages,
+      message: message ?? 'Unexpected error!',
     });
   }
 
-  private createBadRequestExceptionMessage(exception: BadRequestException) {
-    return (exception.getResponse() as any).message;
+  /**
+   * Get error message of bas request exception.
+   *
+   * @param exception bad request exception
+   */
+  private createBadRequestExceptionMessage(
+    exception: BadRequestException,
+  ): string {
+    return (exception.getResponse() as any).message[0];
   }
 
-  private createDefaultMesssage(exception: Error) {
+  /**
+   * Get error message of error instance.
+   *
+   * @param exception error instance.
+   */
+  private createErrorMesssage(exception: Error): string {
     return exception.message;
   }
 }

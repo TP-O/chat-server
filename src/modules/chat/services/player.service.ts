@@ -1,7 +1,6 @@
-import { CACHE_MANAGER, Inject, Injectable } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import { Injectable } from '@nestjs/common';
 import { Player, PlayerState } from '@prisma/client';
-import { Cache } from 'cache-manager';
+import { CacheService } from 'src/modules/cache/cache.service';
 import { PrismaService } from 'src/modules/prisma/prisma.service';
 import { StatusId } from '../types/status.type';
 
@@ -9,8 +8,7 @@ import { StatusId } from '../types/status.type';
 export class PlayerService {
   constructor(
     private readonly prismaService: PrismaService,
-    private readonly configService: ConfigService,
-    @Inject(CACHE_MANAGER) private readonly cacheManager: Cache,
+    private readonly cacheService: CacheService,
   ) {}
 
   /**
@@ -20,16 +18,7 @@ export class PlayerService {
    * @param socketId connected socket's id.
    */
   async makeOnline(playerId: number, socketId: string) {
-    await this.cacheManager.set(
-      `${this.configService.get('socket.branch.sid2Id')}${socketId}`,
-      playerId,
-      { ttl: 0 },
-    );
-    await this.cacheManager.set(
-      `${this.configService.get('socket.branch.id2Sid')}${playerId}`,
-      socketId,
-      { ttl: 0 },
-    );
+    await this.cacheService.addPlayer(socketId, playerId);
 
     return this.prismaService.player.update({
       select: {
@@ -37,9 +26,12 @@ export class PlayerService {
         username: true,
         state: {
           select: {
-            socket_id: true,
+            status: {
+              select: {
+                name: true,
+              },
+            },
             latest_match_joined_at: true,
-            status: true,
           },
         },
       },
@@ -63,20 +55,11 @@ export class PlayerService {
    * @param socketId connected socket's id.
    */
   async makeOffline(socketId: string) {
-    const id = await this.cacheManager.get(
-      `${this.configService.get('socket.branch.sid2Id')}${socketId}`,
-    );
+    const status = await this.cacheService.removePlayer(socketId);
 
-    if (id === null) {
-      return { player_id: id };
+    if (!status) {
+      return { player_id: null };
     }
-
-    await this.cacheManager.del(
-      `${this.configService.get('socket.branch.sid2Id')}${socketId}`,
-    );
-    await this.cacheManager.del(
-      `${this.configService.get('socket.branch.id2Sid')}${id}`,
-    );
 
     return this.prismaService.playerState.update({
       select: {
@@ -98,51 +81,51 @@ export class PlayerService {
    * @param playerId player's id.
    */
   async getOnlineFriends(playerId: number) {
-    const result = await this.prismaService.player.findUnique({
-      select: {
-        first_player_in_relationships: {
-          select: {
-            second_player: {
-              select: {
-                id: true,
-                username: true,
-                state: true,
+    return this.convertToPlayerList(
+      await this.prismaService.player.findUnique({
+        select: {
+          first_player_in_relationships: {
+            select: {
+              second_player: {
+                select: {
+                  id: true,
+                  username: true,
+                  state: true,
+                },
+              },
+            },
+            where: {
+              second_player: {
+                state: {
+                  status_id: StatusId.ONLINE,
+                },
               },
             },
           },
-          where: {
-            second_player: {
-              state: {
-                status_id: StatusId.ONLINE,
+          second_player_in_relationships: {
+            select: {
+              frist_player: {
+                select: {
+                  id: true,
+                  username: true,
+                  state: true,
+                },
+              },
+            },
+            where: {
+              frist_player: {
+                state: {
+                  status_id: StatusId.ONLINE,
+                },
               },
             },
           },
         },
-        second_player_in_relationships: {
-          select: {
-            frist_player: {
-              select: {
-                id: true,
-                username: true,
-                state: true,
-              },
-            },
-          },
-          where: {
-            frist_player: {
-              state: {
-                status_id: StatusId.ONLINE,
-              },
-            },
-          },
+        where: {
+          id: playerId,
         },
-      },
-      where: {
-        id: playerId,
-      },
-    });
-
-    return this.convertToPlayerList(result);
+      }),
+    );
   }
 
   /**
@@ -151,37 +134,55 @@ export class PlayerService {
    * @param playerId player's id.
    */
   async getFriendList(playerId: number) {
-    const result = await this.prismaService.player.findUnique({
-      select: {
-        first_player_in_relationships: {
-          select: {
-            second_player: {
-              select: {
-                id: true,
-                username: true,
-                state: true,
+    return this.convertToPlayerList(
+      await this.prismaService.player.findUnique({
+        select: {
+          first_player_in_relationships: {
+            select: {
+              second_player: {
+                select: {
+                  id: true,
+                  username: true,
+                  state: {
+                    select: {
+                      status: {
+                        select: {
+                          name: true,
+                        },
+                      },
+                      latest_match_joined_at: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
+          second_player_in_relationships: {
+            select: {
+              frist_player: {
+                select: {
+                  id: true,
+                  username: true,
+                  state: {
+                    select: {
+                      status: {
+                        select: {
+                          name: true,
+                        },
+                      },
+                      latest_match_joined_at: true,
+                    },
+                  },
+                },
               },
             },
           },
         },
-        second_player_in_relationships: {
-          select: {
-            frist_player: {
-              select: {
-                id: true,
-                username: true,
-                state: true,
-              },
-            },
-          },
+        where: {
+          id: playerId,
         },
-      },
-      where: {
-        id: playerId,
-      },
-    });
-
-    return this.convertToPlayerList(result);
+      }),
+    );
   }
 
   /**
@@ -191,10 +192,10 @@ export class PlayerService {
    */
   private convertToPlayerList(data: {
     first_player_in_relationships: {
-      second_player: Partial<Player> & { state: PlayerState };
+      second_player: Partial<Player> & { state: Partial<PlayerState> };
     }[];
     second_player_in_relationships: {
-      frist_player: Partial<Player> & { state: PlayerState };
+      frist_player: Partial<Player> & { state: Partial<PlayerState> };
     }[];
   }) {
     return data.first_player_in_relationships
@@ -209,19 +210,18 @@ export class PlayerService {
    * @param friendId friend's id.
    */
   async areFriends(playerId: number, friendId: number) {
-    const friendRelationship =
-      await this.prismaService.friendRelationship.findFirst({
-        select: {
-          id: true,
-        },
-        where: {
-          OR: [
-            { first_player_id: playerId, second_player_id: friendId },
-            { first_player_id: playerId, second_player_id: friendId },
-          ],
-        },
-      });
+    const relationship = await this.prismaService.friendRelationship.findFirst({
+      select: {
+        id: true,
+      },
+      where: {
+        OR: [
+          { first_player_id: playerId, second_player_id: friendId },
+          { first_player_id: playerId, second_player_id: friendId },
+        ],
+      },
+    });
 
-    return Number.isInteger(friendRelationship?.id);
+    return Number.isInteger(relationship?.id);
   }
 }

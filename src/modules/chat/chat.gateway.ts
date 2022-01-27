@@ -9,24 +9,28 @@ import {
   WebSocketServer,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
-import { socketConfig } from 'src/configs/socket.config';
+import { validationConfig } from 'src/configs/validation.config';
 import { AllExceptionsFilter } from 'src/filters/all-exception.filter';
 import { AuthService } from '../auth/auth.service';
-import { PrivateMessageBody } from './dto/private-message.dto';
+import { CacheService } from '../cache/cache.service';
+import { PrivateMessageRequest } from './dto/private-message.request';
 import { ChatService } from './services/chat.service';
 import { MessageService } from './services/message.service';
+import { PlayerService } from './services/player.service';
 import { Event } from './types/event.type';
 
-@WebSocketGateway(socketConfig.port)
-@UsePipes(new ValidationPipe())
+@UsePipes(new ValidationPipe(validationConfig))
 @UseFilters(new AllExceptionsFilter())
+@WebSocketGateway()
 export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   private readonly server: Server;
 
   constructor(
     private readonly authService: AuthService,
+    private readonly cacheService: CacheService,
     private readonly chatService: ChatService,
+    private readonly playerService: PlayerService,
     private readonly messageService: MessageService,
   ) {}
 
@@ -35,18 +39,21 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
    *
    * @param socket connected socket.
    */
-  async handleConnection(socket: Socket) {
+  async handleConnection(socket: Socket): Promise<any> {
     const playerId = await this.authService.verify(
-      socket.handshake.headers.authorization || '',
+      socket.handshake.headers.authorization,
     );
 
     if (!playerId) {
-      this.handleFailedEvent(socket.id, 'CONNECTION', ['Unauthenticated']);
+      socket.emit(Event.FAILURE, {
+        event: Event.CONNECTION,
+        messages: ['Unauthenticated!'],
+      });
 
       return socket.disconnect();
     }
 
-    this.chatService.connect(this.server, socket.id, playerId);
+    return this.chatService.connect(this.server, socket.id, playerId);
   }
 
   /**
@@ -54,8 +61,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
    *
    * @param socket connected socket.
    */
-  async handleDisconnect(socket: Socket) {
-    this.chatService.disconnect(this.server, socket.id);
+  handleDisconnect(socket: Socket): Promise<void> {
+    return this.chatService.disconnect(this.server, socket.id);
   }
 
   /**
@@ -67,43 +74,28 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @SubscribeMessage(Event.PRIVATE_MESSAGE)
   async handlePrivateMessage(
     @ConnectedSocket() socket: Socket,
-    @MessageBody() message: PrivateMessageBody,
+    @MessageBody() message: PrivateMessageRequest,
   ) {
-    const prviateMessage = await this.messageService.storePrivateMessage(
-      socket.id,
-      message,
+    const senderId = await this.cacheService.getPlayerId(socket.id);
+    const areFriends = await this.playerService.areFriends(
+      senderId,
+      message.receiver_id,
     );
 
-    if (!prviateMessage) {
-      this.handleFailedEvent(
-        socket.id,
-        Event.PRIVATE_MESSAGE,
-        ['Unable to send this message'],
-        message,
-      );
-    } else {
-      this.chatService.sendPrivateMessage(this.server, prviateMessage);
+    if (!areFriends) {
+      throw new Error('Only friends can send messages to each other!');
     }
-  }
 
-  /**
-   * Handle failed event.
-   *
-   * @param socketId connected socket id.
-   * @param event event's name.
-   * @param messages error messages.
-   * @param messageBody event's message body.
-   */
-  private handleFailedEvent(
-    socketId: string,
-    event: string,
-    messages: string[],
-    messageBody?: any,
-  ) {
-    this.server.to(socketId).emit(Event.EXCEPTION, {
-      event,
-      messages,
-      data: messageBody,
+    const privateMessage = await this.messageService.storePrivateMessage({
+      sender_id: senderId,
+      receiver_id: message.receiver_id,
+      content: message.content,
     });
+
+    return this.chatService.sendPrivateMessage(
+      this.server,
+      message.identifier,
+      privateMessage,
+    );
   }
 }
