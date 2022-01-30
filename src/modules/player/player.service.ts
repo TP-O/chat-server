@@ -1,8 +1,9 @@
 import { Injectable } from '@nestjs/common';
-import { Player, PlayerState } from '@prisma/client';
+import { Player, PlayerState, PlayerStatus } from '@prisma/client';
+import { Socket } from 'socket.io';
 import { CacheService } from 'src/modules/cache/cache.service';
 import { PrismaService } from 'src/modules/prisma/prisma.service';
-import { StatusId } from '../types/status.type';
+import { StatusId } from 'src/types/status.type';
 
 @Injectable()
 export class PlayerService {
@@ -76,6 +77,79 @@ export class PlayerService {
   }
 
   /**
+   * Add the player to the specific room.
+   *
+   * @param socket connected socket.
+   * @param roomId room's id.
+   */
+  async joinRoom(
+    socket: Socket,
+    roomId: string,
+  ): Promise<{ id: number; username: string }> {
+    await this.cacheService.addPlayerToRoom(socket.id, roomId);
+
+    const playerState = await this.prismaService.playerState.update({
+      select: {
+        player: {
+          select: {
+            id: true,
+            username: true,
+          },
+        },
+      },
+      where: {
+        socket_id: socket.id,
+      },
+      data: {
+        status_id: StatusId.IN_ROOM,
+      },
+    });
+
+    socket.join(roomId);
+
+    return playerState.player;
+  }
+
+  /**
+   * Kick the player out of the current room.
+   *
+   * @param socket connected socket.
+   * @param isOnline check if user disconnected or just leave the room.
+   */
+  async leaveCurrentRoom(socket: Socket, isOnline = true): Promise<any> {
+    const roomId = await this.cacheService.getRoomOfPlayer(socket.id);
+
+    if (!roomId) {
+      throw new Error('You are not in a room!');
+    }
+
+    await this.cacheService.removePlayerFromRoom(socket.id);
+    const playerState = await this.prismaService.playerState.update({
+      select: {
+        player: {
+          select: {
+            id: true,
+            username: true,
+          },
+        },
+      },
+      where: {
+        socket_id: socket.id,
+      },
+      data: {
+        status_id: isOnline ? StatusId.ONLINE : StatusId.OFFLINE,
+      },
+    });
+
+    socket.leave(roomId);
+
+    return {
+      roomId,
+      player: playerState.player,
+    };
+  }
+
+  /**
    * Get all player's online friends.
    *
    * @param playerId player's id.
@@ -90,14 +164,20 @@ export class PlayerService {
                 select: {
                   id: true,
                   username: true,
-                  state: true,
+                  state: {
+                    select: {
+                      socket_id: true,
+                    },
+                  },
                 },
               },
             },
             where: {
               second_player: {
                 state: {
-                  status_id: StatusId.ONLINE,
+                  status_id: {
+                    not: StatusId.OFFLINE,
+                  },
                 },
               },
             },
@@ -108,14 +188,20 @@ export class PlayerService {
                 select: {
                   id: true,
                   username: true,
-                  state: true,
+                  state: {
+                    select: {
+                      socket_id: true,
+                    },
+                  },
                 },
               },
             },
             where: {
               frist_player: {
                 state: {
-                  status_id: StatusId.ONLINE,
+                  status_id: {
+                    not: StatusId.OFFLINE,
+                  },
                 },
               },
             },
@@ -150,6 +236,7 @@ export class PlayerService {
                           name: true,
                         },
                       },
+                      socket_id: true,
                       latest_match_joined_at: true,
                     },
                   },
@@ -170,6 +257,7 @@ export class PlayerService {
                           name: true,
                         },
                       },
+                      socket_id: true,
                       latest_match_joined_at: true,
                     },
                   },
@@ -192,10 +280,14 @@ export class PlayerService {
    */
   private convertToPlayerList(data: {
     first_player_in_relationships: {
-      second_player: Partial<Player> & { state: Partial<PlayerState> };
+      second_player: Partial<Player> & {
+        state: Partial<PlayerState> & { status?: Partial<PlayerStatus> };
+      };
     }[];
     second_player_in_relationships: {
-      frist_player: Partial<Player> & { state: Partial<PlayerState> };
+      frist_player: Partial<Player> & {
+        state: Partial<PlayerState> & { status?: Partial<PlayerStatus> };
+      };
     }[];
   }) {
     return data.first_player_in_relationships
@@ -209,7 +301,7 @@ export class PlayerService {
    * @param playerId player's id.
    * @param friendId friend's id.
    */
-  async areFriends(playerId: number, friendId: number) {
+  async areFriends(playerId: number, friendId: number): Promise<boolean> {
     const relationship = await this.prismaService.friendRelationship.findFirst({
       select: {
         id: true,
@@ -223,5 +315,31 @@ export class PlayerService {
     });
 
     return Number.isInteger(relationship?.id);
+  }
+
+  /**
+   * Get players by their socket ids.
+   *
+   * @param socketIds list of socket ids.
+   */
+  getPlayersBySocketIds(socketIds: string[]) {
+    return this.prismaService.player.findMany({
+      select: {
+        id: true,
+        username: true,
+        state: {
+          select: {
+            socket_id: true,
+          },
+        },
+      },
+      where: {
+        state: {
+          socket_id: {
+            in: socketIds,
+          },
+        },
+      },
+    });
   }
 }

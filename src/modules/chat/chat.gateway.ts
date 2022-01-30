@@ -11,13 +11,14 @@ import {
 import { Server, Socket } from 'socket.io';
 import { validationConfig } from 'src/configs/validation.config';
 import { AllExceptionsFilter } from 'src/filters/all-exception.filter';
+import { ChatService } from './chat.service';
 import { AuthService } from '../auth/auth.service';
-import { CacheService } from '../cache/cache.service';
-import { PrivateMessageRequest } from './dto/private-message.request';
-import { ChatService } from './services/chat.service';
-import { MessageService } from './services/message.service';
-import { PlayerService } from './services/player.service';
-import { Event } from './types/event.type';
+import { PrivateMessageRequest } from '../message/dto/private-message.request';
+import { NotificationService } from '../notification/notification.service';
+import { RoomCreationRequest } from '../room/dto/room-creation.request';
+import { RoomJoiningRequest } from '../room/dto/room-joining.request';
+import { Event } from 'src/types/event.type';
+import { GroupMessageRequest } from '../message/dto/group-message.request';
 
 @UsePipes(new ValidationPipe(validationConfig))
 @UseFilters(new AllExceptionsFilter())
@@ -28,10 +29,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   constructor(
     private readonly authService: AuthService,
-    private readonly cacheService: CacheService,
     private readonly chatService: ChatService,
-    private readonly playerService: PlayerService,
-    private readonly messageService: MessageService,
+    private readonly notificationService: NotificationService,
   ) {}
 
   /**
@@ -39,21 +38,25 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
    *
    * @param socket connected socket.
    */
-  async handleConnection(socket: Socket): Promise<any> {
+  async handleConnection(socket: Socket): Promise<void> {
     const playerId = await this.authService.verify(
       socket.handshake.headers.authorization,
     );
 
     if (!playerId) {
-      socket.emit(Event.FAILURE, {
-        event: Event.CONNECTION,
-        messages: ['Unauthenticated!'],
+      this.notificationService.notifyFailure({
+        server: this.server,
+        to: socket.id,
+        notification: {
+          event: Event.CONNECTION,
+          message: 'Unauthenticated!',
+        },
       });
 
-      return socket.disconnect();
+      socket.disconnect();
+    } else {
+      await this.chatService.connect(this.server, socket, playerId);
     }
-
-    return this.chatService.connect(this.server, socket.id, playerId);
   }
 
   /**
@@ -61,41 +64,73 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
    *
    * @param socket connected socket.
    */
-  handleDisconnect(socket: Socket): Promise<void> {
-    return this.chatService.disconnect(this.server, socket.id);
+  async handleDisconnect(socket: Socket): Promise<void> {
+    await this.chatService.disconnect(this.server, socket);
   }
 
   /**
    * Handle private message from the player.
    *
    * @param socket connected socket.
-   * @param data event's data.
+   * @param request request's data.
    */
   @SubscribeMessage(Event.PRIVATE_MESSAGE)
   async handlePrivateMessage(
     @ConnectedSocket() socket: Socket,
-    @MessageBody() message: PrivateMessageRequest,
-  ) {
-    const senderId = await this.cacheService.getPlayerId(socket.id);
-    const areFriends = await this.playerService.areFriends(
-      senderId,
-      message.receiver_id,
-    );
+    @MessageBody() request: PrivateMessageRequest,
+  ): Promise<void> {
+    await this.chatService.sendPrivateMessage(this.server, socket, request);
+  }
 
-    if (!areFriends) {
-      throw new Error('Only friends can send messages to each other!');
-    }
+  /**
+   * Handle room creation.
+   *
+   * @param socket connected socket.
+   * @param request request's data.
+   */
+  @SubscribeMessage(Event.ROOM_CREATION)
+  async handleRoomCreation(
+    @ConnectedSocket() socket: Socket,
+    @MessageBody() request: RoomCreationRequest,
+  ): Promise<void> {
+    await this.chatService.createRoom(this.server, socket, request);
+  }
 
-    const privateMessage = await this.messageService.storePrivateMessage({
-      sender_id: senderId,
-      receiver_id: message.receiver_id,
-      content: message.content,
-    });
+  /**
+   * Handle room joining.
+   *
+   * @param socket connected socket.
+   * @param request request's data.
+   */
+  @SubscribeMessage(Event.ROOM_JOINING)
+  async handRoomJoining(
+    @ConnectedSocket() socket: Socket,
+    @MessageBody() request: RoomJoiningRequest,
+  ): Promise<void> {
+    await this.chatService.joinRoom(this.server, socket, request);
+  }
 
-    return this.chatService.sendPrivateMessage(
-      this.server,
-      message.identifier,
-      privateMessage,
-    );
+  /**
+   * Handle room leaving.
+   *
+   * @param socket connected socket.
+   */
+  @SubscribeMessage(Event.ROOM_LEAVING)
+  async handRoomEscape(@ConnectedSocket() socket: Socket) {
+    await this.chatService.leaveRoom(this.server, socket);
+  }
+
+  /**
+   * Handle group message from the player.
+   *
+   * @param socket connected socket.
+   * @param request request's data.
+   */
+  @SubscribeMessage(Event.GROUP_MESSAGE)
+  async handleGroupMessage(
+    @ConnectedSocket() socket: Socket,
+    @MessageBody() request: GroupMessageRequest,
+  ): Promise<void> {
+    await this.chatService.sendGroupMessage(this.server, socket, request);
   }
 }

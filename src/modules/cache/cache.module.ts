@@ -1,10 +1,10 @@
 import { CacheModule as NestjsCacheModule, Module } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { cacheConfig } from 'src/configs/cache.config';
 import { CacheService } from './cache.service';
 
 @Module({
-  imports: [NestjsCacheModule.register(cacheConfig)],
+  imports: [NestjsCacheModule.register(cacheConfig), ConfigModule],
   exports: [CacheService],
   providers: [CacheService, ConfigService],
 })

@@ -1,7 +1,10 @@
 export const stateConfig = {
   // Redis branches
   branch: {
-    id2Sid: 'socket:ids:',
-    sid2Id: 'socket:sids:',
+    idToSocketId: 'socket:id2sid:',
+    socketIdToId: 'socket:sid2id:',
+    socketIdToRoomId: 'socket:sid2rid:',
+    rooms: 'socket:rooms:',
   },
+  roomIdLength: 5,
 };
