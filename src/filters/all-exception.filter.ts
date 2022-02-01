@@ -1,6 +1,6 @@
 import { Catch, ArgumentsHost, BadRequestException } from '@nestjs/common';
 import { BaseWsExceptionFilter } from '@nestjs/websockets';
-import { Event } from 'src/types/event.type';
+import { EmitedEvent } from 'src/types/event.type';
 
 @Catch()
 export class AllExceptionsFilter extends BaseWsExceptionFilter {
@@ -20,7 +20,7 @@ export class AllExceptionsFilter extends BaseWsExceptionFilter {
       message = this.createErrorMesssage(exception);
     }
 
-    return server.getClient().emit(Event.FAILURE, {
+    return server.getClient().emit(EmitedEvent.PROCESS_FAILED, {
       message: message ?? 'Unexpected error!',
     });
   }

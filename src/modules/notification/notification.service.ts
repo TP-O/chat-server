@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { isEmpty } from 'class-validator';
-import { Event } from 'src/types/event.type';
+import { EmitedEvent } from 'src/types/event.type';
 import { NotificationInput } from 'src/types/notification.type';
 
 @Injectable()
@@ -24,7 +24,7 @@ export class NotificationService {
   notifySuccess<T>(input: Omit<NotificationInput<T>, 'event'>): void {
     input.notification.message === input.notification.message ?? 'Completed!';
 
-    this.notify<T>({ ...input, event: Event.SUCCESS });
+    this.notify<T>({ ...input, event: EmitedEvent.PROCESS_SUCCESSFULLY });
   }
 
   /**
@@ -36,6 +36,6 @@ export class NotificationService {
     input.notification.message === input.notification.message ??
       'Unexpected error!';
 
-    this.notify<T>({ ...input, event: Event.FAILURE });
+    this.notify<T>({ ...input, event: EmitedEvent.PROCESS_FAILED });
   }
 }

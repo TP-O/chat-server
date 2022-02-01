@@ -8,7 +8,7 @@ import { PlayerService } from '../player/player.service';
 import { RoomCreationRequest } from '../room/dto/room-creation.request';
 import { RoomJoiningRequest } from '../room/dto/room-joining.request';
 import { RoomService } from '../room/room.service';
-import { Event } from 'src/types/event.type';
+import { EmitedEvent, ListenedEvent } from 'src/types/event.type';
 import { Status } from 'src/types/status.type';
 import { GroupMessageRequest } from '../message/dto/group-message.request';
 
@@ -44,7 +44,7 @@ export class ChatService {
     this.notificationService.notify({
       server,
       to: onlineFriendSocketIds,
-      event: Event.FRIEND_STATUS,
+      event: EmitedEvent.UPDATE_FRIEND_STATUS,
       notification: {
         data: player,
       },
@@ -54,7 +54,7 @@ export class ChatService {
     this.notificationService.notify({
       server,
       to: socket.id,
-      event: Event.FRIEND_LIST,
+      event: EmitedEvent.RECEIVE_FRIEND_LIST,
       notification: {
         data: friendList,
       },
@@ -86,7 +86,7 @@ export class ChatService {
     this.notificationService.notify({
       server,
       to: onlineFriends.map((f) => f.state.socket_id),
-      event: Event.FRIEND_STATUS,
+      event: EmitedEvent.UPDATE_FRIEND_STATUS,
       notification: {
         data: {
           id: playerId,
@@ -132,7 +132,7 @@ export class ChatService {
     this.notificationService.notify({
       server,
       to: receiverSocketId,
-      event: Event.PRIVATE_MESSAGE,
+      event: EmitedEvent.RECEIVE_PRIVATE_MESSAGE,
       notification: {
         data: {
           identifier: request.identifier,
@@ -146,7 +146,7 @@ export class ChatService {
       server,
       to: socket.id,
       notification: {
-        event: Event.PRIVATE_MESSAGE,
+        event: ListenedEvent.SEND_PRIVATE_MESSAGE,
         message: 'Message has been sent!',
         data: {
           identifier: request.identifier,
@@ -184,7 +184,7 @@ export class ChatService {
       server,
       to: socket.id,
       notification: {
-        event: Event.ROOM_CREATION,
+        event: ListenedEvent.CREATE_ROOM,
         message: 'Room created successfully!',
         data: room,
       },
@@ -222,7 +222,7 @@ export class ChatService {
       server,
       to: socket.id,
       notification: {
-        event: Event.ROOM_JOINING,
+        event: ListenedEvent.JOIN_ROOM,
         message: 'Joined the room!',
         data: {
           room_id: newRoom.id,
@@ -243,10 +243,13 @@ export class ChatService {
     this.notificationService.notify({
       server,
       to: newRoom.id,
-      event: Event.ROOM_JOINING_BROADCASTING,
+      event: EmitedEvent.UPDATE_GROUP_MEMBER,
       notification: {
         message: `${player.username} has joined the room!`,
-        data: player,
+        data: {
+          isJoined: true,
+          player,
+        },
       },
     });
   }
@@ -279,7 +282,7 @@ export class ChatService {
       server,
       to: socket.id,
       notification: {
-        event: Event.ROOM_LEAVING,
+        event: ListenedEvent.LEAVE_ROOM,
         message: 'Leave the room!',
       },
     });
@@ -287,10 +290,13 @@ export class ChatService {
     this.notificationService.notify({
       server,
       to: room.id,
-      event: Event.ROOM_JOINING_BROADCASTING,
+      event: EmitedEvent.UPDATE_GROUP_MEMBER,
       notification: {
         message: `${player.username} has leave the room!`,
-        data: player,
+        data: {
+          isJoined: false,
+          player,
+        },
       },
     });
   }
@@ -318,7 +324,7 @@ export class ChatService {
     this.notificationService.notify({
       server,
       to: roomId,
-      event: Event.ROOM_MESSAGE,
+      event: EmitedEvent.RECEIVE_GROUP_MESSAGE,
       notification: {
         data: {
           identifier: request.identifier,
@@ -332,7 +338,7 @@ export class ChatService {
       server,
       to: socket.id,
       notification: {
-        event: Event.ROOM_MESSAGE,
+        event: ListenedEvent.SEND_GROUP_MESSAGE,
         message: 'Message has been sent!',
         data: {
           identifier: request.identifier,

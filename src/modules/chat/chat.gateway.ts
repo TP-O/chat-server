@@ -17,7 +17,7 @@ import { PrivateMessageRequest } from '../message/dto/private-message.request';
 import { NotificationService } from '../notification/notification.service';
 import { RoomCreationRequest } from '../room/dto/room-creation.request';
 import { RoomJoiningRequest } from '../room/dto/room-joining.request';
-import { Event } from 'src/types/event.type';
+import { ListenedEvent } from 'src/types/event.type';
 import { GroupMessageRequest } from '../message/dto/group-message.request';
 
 @UsePipes(new ValidationPipe(validationConfig))
@@ -48,7 +48,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         server: this.server,
         to: socket.id,
         notification: {
-          event: Event.CONNECTION,
+          event: ListenedEvent.CONNECT,
           message: 'Unauthenticated!',
         },
       });
@@ -74,7 +74,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
    * @param socket connected socket.
    * @param request request's data.
    */
-  @SubscribeMessage(Event.PRIVATE_MESSAGE)
+  @SubscribeMessage(ListenedEvent.SEND_PRIVATE_MESSAGE)
   async handlePrivateMessage(
     @ConnectedSocket() socket: Socket,
     @MessageBody() request: PrivateMessageRequest,
@@ -88,7 +88,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
    * @param socket connected socket.
    * @param request request's data.
    */
-  @SubscribeMessage(Event.ROOM_CREATION)
+  @SubscribeMessage(ListenedEvent.CREATE_ROOM)
   async handleRoomCreation(
     @ConnectedSocket() socket: Socket,
     @MessageBody() request: RoomCreationRequest,
@@ -102,7 +102,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
    * @param socket connected socket.
    * @param request request's data.
    */
-  @SubscribeMessage(Event.ROOM_JOINING)
+  @SubscribeMessage(ListenedEvent.JOIN_ROOM)
   async handRoomJoining(
     @ConnectedSocket() socket: Socket,
     @MessageBody() request: RoomJoiningRequest,
@@ -115,7 +115,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
    *
    * @param socket connected socket.
    */
-  @SubscribeMessage(Event.ROOM_LEAVING)
+  @SubscribeMessage(ListenedEvent.LEAVE_ROOM)
   async handRoomEscape(@ConnectedSocket() socket: Socket) {
     await this.chatService.leaveRoom(this.server, socket);
   }
@@ -126,7 +126,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
    * @param socket connected socket.
    * @param request request's data.
    */
-  @SubscribeMessage(Event.GROUP_MESSAGE)
+  @SubscribeMessage(ListenedEvent.SEND_GROUP_MESSAGE)
   async handleGroupMessage(
     @ConnectedSocket() socket: Socket,
     @MessageBody() request: GroupMessageRequest,
