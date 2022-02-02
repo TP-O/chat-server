@@ -8,16 +8,18 @@ services:
         volumes:
             - ./:/app
         ports:
-            - 3000:${CHAT_PORT}
+            - 3000:${SOCKET_PORT}
         entrypoint:
             - /bin/sh
         command:
             - -c
-            - npx pnpm start:dev
+            - npm run start:dev
         networks:
             - postgres-network
+            - redis-network
         depends_on:
             - postgres
+            - redis
         restart: unless-stopped
 
     postgres:
@@ -42,5 +44,31 @@ services:
             - postgres
         restart: unless-stopped
 
+    redis:
+        image: redis:6.2.5-alpine3.14
+        environment:
+            - REDIS_PASSWORD=${REDIS_PASSWORD}
+        volumes:
+          - ./.docker/redis/data:/data
+        command: redis-server --requirepass ${REDIS_PASSWORD}
+        networks:
+            - redis-network
+        restart: unless-stopped
+
+    rediscommander:
+        image: rediscommander/redis-commander:latest
+        environment:
+            REDIS_HOST: ${REDIS_HOST}
+            REDIS_PORT: ${REDIS_PORT}
+            REDIS_PASSWORD: ${REDIS_PASSWORD}
+        ports:
+            - 8082:8081
+        networks:
+            - redis-network
+        depends_on:
+            - redis
+        restart: unless-stopped
+
 networks:
     postgres-network:
+    redis-network:

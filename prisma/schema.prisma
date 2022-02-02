@@ -8,7 +8,7 @@ datasource db {
 }
 
 model Player {
-  id                BigInt    @id @default(autoincrement())
+  id                Int       @id @default(autoincrement())
   username          String    @db.VarChar(20)
   email             String    @db.VarChar(50)
   password          String?   @db.VarChar(64)
@@ -16,15 +16,22 @@ model Player {
   created_at        DateTime? @default(now()) @db.Timestamp(0)
   updated_at        DateTime? @default(now()) @db.Timestamp(0)
 
-  Lock Lock[]
+  locks                          Lock[]
+  state                          PlayerState?
+  first_player_in_relationships  FriendRelationship[] @relation("first_player")
+  second_player_in_relationships FriendRelationship[] @relation("second_player")
+  sent_messages                  PrivateMessage[]     @relation("sender")
+  received_messages              PrivateMessage[]     @relation("receiver")
 
+  @@unique([username])
+  @@unique([email])
   @@map("players")
 }
 
 model PersonalAccessToken {
-  id             BigInt    @id @default(autoincrement())
+  id             Int       @id @default(autoincrement())
   tokenable_type String    @db.VarChar(255)
-  tokenable_id   BigInt
+  tokenable_id   Int
   name           String    @db.VarChar(20)
   token          String    @db.VarChar(64)
   abilities      String    @db.Text()
@@ -36,30 +43,95 @@ model PersonalAccessToken {
 }
 
 model LockedAction {
-  id          BigInt    @id @default(autoincrement())
+  id          Int       @id @default(autoincrement())
   name        String    @db.VarChar(50)
   description String    @db.Text()
   message     String    @db.Text()
   created_at  DateTime? @default(now()) @db.Timestamp(0)
   updated_at  DateTime? @default(now()) @db.Timestamp(0)
 
-  Lock Lock[]
+  locks Lock[]
 
+  @@unique([name])
   @@map("locked_actions")
 }
 
 model Lock {
-  id         BigInt    @id @default(autoincrement())
-  player_id  BigInt
-  action_id  BigInt
+  id         Int       @id @default(autoincrement())
+  player_id  Int
+  action_id  Int
   reason     String    @db.Text()
   expired_at DateTime  @db.Timestamp(0)
   created_at DateTime? @default(now()) @db.Timestamp(0)
   updated_at DateTime? @default(now()) @db.Timestamp(0)
 
-  Player Player?       @relation(fields: [player_id], references: [id])
-  Action LockedAction? @relation(fields: [action_id], references: [id])
+  player Player       @relation(fields: [player_id], references: [id])
+  action LockedAction @relation(fields: [action_id], references: [id])
 
   @@unique([player_id, action_id])
   @@map("locks")
+}
+
+model FriendRelationshipType {
+  id   Int    @id @default(autoincrement())
+  name String @db.VarChar(50)
+
+  relationships FriendRelationship[]
+
+  @@unique([name])
+  @@map("friend_relationship_types")
+}
+
+model FriendRelationship {
+  id                   Int       @id @default(autoincrement())
+  first_player_id      Int
+  second_player_id     Int
+  relationship_type_id Int
+  created_at           DateTime? @default(now()) @db.Timestamp(0)
+  updated_at           DateTime? @default(now()) @db.Timestamp(0)
+
+  frist_player  Player                 @relation(name: "first_player", fields: [first_player_id], references: [id])
+  second_player Player                 @relation(name: "second_player", fields: [second_player_id], references: [id])
+  type          FriendRelationshipType @relation(fields: [relationship_type_id], references: [id])
+
+  @@unique([first_player_id, second_player_id])
+  @@map("friend_relationships")
+}
+
+model PlayerStatus {
+  id   Int    @id @default(autoincrement())
+  name String @db.VarChar(25)
+
+  states PlayerState[]
+
+  @@unique([name])
+  @@map("player_status")
+}
+
+model PlayerState {
+  id                     Int       @id @default(autoincrement())
+  player_id              Int
+  status_id              Int
+  socket_id              String?   @db.VarChar(25)
+  latest_match_joined_at DateTime? @db.Timestamp(0)
+
+  player Player       @relation(fields: [player_id], references: [id])
+  status PlayerStatus @relation(fields: [status_id], references: [id])
+
+  @@unique([player_id])
+  @@unique([socket_id])
+  @@map("player_states")
+}
+
+model PrivateMessage {
+  id          Int       @id @default(autoincrement())
+  sender_id   Int
+  receiver_id Int
+  content     String    @db.Text()
+  created_at  DateTime? @default(now()) @db.Timestamp(0)
+
+  sender   Player @relation(name: "sender", fields: [sender_id], references: [id])
+  receiver Player @relation(name: "receiver", fields: [receiver_id], references: [id])
+
+  @@map("private_messages")
 }
