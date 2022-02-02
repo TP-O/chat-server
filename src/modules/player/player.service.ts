@@ -1,8 +1,8 @@
 import { Injectable } from '@nestjs/common';
-import { Player, PlayerState, PlayerStatus } from '@prisma/client';
 import { Socket } from 'socket.io';
 import { CacheService } from 'src/modules/cache/cache.service';
 import { PrismaService } from 'src/modules/prisma/prisma.service';
+import { PublicPlayerInformation } from 'src/types/player.type';
 import { StatusId } from 'src/types/status.type';
 
 @Injectable()
@@ -18,7 +18,10 @@ export class PlayerService {
    * @param playerId player'id.
    * @param socketId connected socket's id.
    */
-  async makeOnline(playerId: number, socketId: string) {
+  async makeOnline(
+    playerId: number,
+    socketId: string,
+  ): Promise<PublicPlayerInformation> {
     await this.cacheService.addPlayer(socketId, playerId);
 
     return this.prismaService.player.update({
@@ -150,68 +153,72 @@ export class PlayerService {
   }
 
   /**
-   * Get all player's online friends.
+   * Get socket id of player's online friends.
    *
    * @param playerId player's id.
    */
-  async getOnlineFriends(playerId: number) {
-    return this.convertToPlayerList(
-      await this.prismaService.player.findUnique({
-        select: {
-          first_player_in_relationships: {
-            select: {
-              second_player: {
-                select: {
-                  id: true,
-                  username: true,
-                  state: {
-                    select: {
-                      socket_id: true,
-                    },
-                  },
-                },
-              },
-            },
-            where: {
-              second_player: {
+  async getFriendsSocketId(playerId: number): Promise<string[]> {
+    const result = await this.prismaService.player.findUnique({
+      select: {
+        first_player_in_relationships: {
+          select: {
+            second_player: {
+              select: {
                 state: {
-                  status_id: {
-                    not: StatusId.OFFLINE,
+                  select: {
+                    socket_id: true,
                   },
                 },
               },
             },
           },
-          second_player_in_relationships: {
-            select: {
-              frist_player: {
-                select: {
-                  id: true,
-                  username: true,
-                  state: {
-                    select: {
-                      socket_id: true,
-                    },
-                  },
-                },
-              },
-            },
-            where: {
-              frist_player: {
-                state: {
-                  status_id: {
-                    not: StatusId.OFFLINE,
-                  },
+          where: {
+            second_player: {
+              state: {
+                status_id: {
+                  not: StatusId.OFFLINE,
                 },
               },
             },
           },
         },
-        where: {
-          id: playerId,
+        second_player_in_relationships: {
+          select: {
+            frist_player: {
+              select: {
+                id: true,
+                username: true,
+                state: {
+                  select: {
+                    socket_id: true,
+                  },
+                },
+              },
+            },
+          },
+          where: {
+            frist_player: {
+              state: {
+                status_id: {
+                  not: StatusId.OFFLINE,
+                },
+              },
+            },
+          },
         },
-      }),
-    );
+      },
+      where: {
+        id: playerId,
+      },
+    });
+
+    return result.first_player_in_relationships
+      .map((f) => f.second_player.state.socket_id)
+      .concat(
+        result.second_player_in_relationships.map(
+          (f) => f.frist_player.state.socket_id,
+        ),
+      );
   }
 
   /**
@@ -219,80 +226,60 @@ export class PlayerService {
    *
    * @param playerId player's id.
    */
-  async getFriendList(playerId: number) {
-    return this.convertToPlayerList(
-      await this.prismaService.player.findUnique({
-        select: {
-          first_player_in_relationships: {
-            select: {
-              second_player: {
-                select: {
-                  id: true,
-                  username: true,
-                  state: {
-                    select: {
-                      status: {
-                        select: {
-                          name: true,
-                        },
+  async getFriendList(playerId: number): Promise<PublicPlayerInformation[]> {
+    const result = await this.prismaService.player.findUnique({
+      select: {
+        first_player_in_relationships: {
+          select: {
+            second_player: {
+              select: {
+                id: true,
+                username: true,
+                state: {
+                  select: {
+                    status: {
+                      select: {
+                        name: true,
                       },
-                      socket_id: true,
-                      latest_match_joined_at: true,
                     },
-                  },
-                },
-              },
-            },
-          },
-          second_player_in_relationships: {
-            select: {
-              frist_player: {
-                select: {
-                  id: true,
-                  username: true,
-                  state: {
-                    select: {
-                      status: {
-                        select: {
-                          name: true,
-                        },
-                      },
-                      socket_id: true,
-                      latest_match_joined_at: true,
-                    },
+                    socket_id: true,
+                    latest_match_joined_at: true,
                   },
                 },
               },
             },
           },
         },
-        where: {
-          id: playerId,
+        second_player_in_relationships: {
+          select: {
+            frist_player: {
+              select: {
+                id: true,
+                username: true,
+                state: {
+                  select: {
+                    status: {
+                      select: {
+                        name: true,
+                      },
+                    },
+                    socket_id: true,
+                    latest_match_joined_at: true,
+                  },
+                },
+              },
+            },
+          },
         },
-      }),
-    );
-  }
+      },
+      where: {
+        id: playerId,
+      },
+    });
 
-  /**
-   * Convert input to player array.
-   *
-   * @param data output of function `getFriendList` or `getOnlineFriends`.
-   */
-  private convertToPlayerList(data: {
-    first_player_in_relationships: {
-      second_player: Partial<Player> & {
-        state: Partial<PlayerState> & { status?: Partial<PlayerStatus> };
-      };
-    }[];
-    second_player_in_relationships: {
-      frist_player: Partial<Player> & {
-        state: Partial<PlayerState> & { status?: Partial<PlayerStatus> };
-      };
-    }[];
-  }) {
-    return data.first_player_in_relationships
+    return result.first_player_in_relationships
       .map((f) => f.second_player)
-      .concat(data.second_player_in_relationships.map((f) => f.frist_player));
+      .concat(result.second_player_in_relationships.map((f) => f.frist_player));
   }
 
   /**

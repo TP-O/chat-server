@@ -6,3 +6,5 @@ export type Room = {
   slots: number;
   remaining: number;
 };
+
+export type CreateRoomOutput = Pick<Room, 'id' | 'slots' | 'remaining'>;

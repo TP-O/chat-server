@@ -4,8 +4,7 @@ import { Socket } from 'socket.io';
 import { stateConfig } from 'src/configs/state.config';
 import { CacheService } from 'src/modules/cache/cache.service';
 import { RoomJoiningRequest } from './dto/room-joining.request';
-import { RoomCreationNotificationData } from 'src/types/notification.type';
-import { Room } from 'src/types/room.type';
+import { CreateRoomOutput, Room } from 'src/types/room.type';
 
 @Injectable()
 export class RoomService {
@@ -33,7 +32,7 @@ export class RoomService {
    */
   async createRoom(
     roomInput: Omit<Room, 'id' | 'remaining'>,
-  ): Promise<RoomCreationNotificationData> {
+  ): Promise<CreateRoomOutput> {
     const roomId = generateRoomId({ length: stateConfig.roomIdLength });
     const remaining = roomInput.slots - 1;
 
@@ -44,7 +43,7 @@ export class RoomService {
     });
 
     return {
-      room_id: roomId,
+      id: roomId,
       slots: roomInput.slots,
       remaining,
     };

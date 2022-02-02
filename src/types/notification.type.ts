@@ -1,34 +1,31 @@
 import { Server } from 'socket.io';
-import { Event } from './event.type';
+import { EmitedEvent, ListenedEvent } from './event.type';
+import { PlayerStatus, PublicPlayerInformation } from './player.type';
 
 export type NotificationInput<T> = {
   server: Server;
   to: string | string[];
-  event: Event;
+  event: EmitedEvent;
   notification: Notification<T>;
 };
 
 export type Notification<T> = {
-  event?: Event;
+  event?: ListenedEvent;
   message?: string;
   data?: T;
 };
 
-export type PrivateMessageNotificationData = {
-  identifier: string;
-  receiver_id: number;
-  message?: string;
+export type FriendStatusNotification = PublicPlayerInformation | PlayerStatus;
+
+export type MessageNotification = {
+  sender_id: number;
+  content: string;
 };
 
-export type RoomCreationNotificationData = {
-  room_id: string;
-  slots: number;
-  remaining: number;
-};
-
-export type RoomJoiningNotificationData = {
-  room_id: string;
-  is_private: boolean;
-  slots: number;
-  remaining: number;
+export type JoinedOrLeftRoomNotification = {
+  isJoined: boolean;
+  player: {
+    id: number;
+    username: string;
+  };
 };
