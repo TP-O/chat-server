@@ -1,11 +1,11 @@
 import {
   IsBoolean,
   IsInt,
-  IsOptional,
   IsString,
   Length,
   Max,
   Min,
+  ValidateIf,
 } from 'class-validator';
 
 export class RoomCreationRequest {
@@ -26,7 +26,7 @@ export class RoomCreationRequest {
   /**
    * Private room's password
    */
-  @IsOptional()
+  @ValidateIf((c) => c.is_private)
   @IsString()
   @Length(5)
   password?: string;
